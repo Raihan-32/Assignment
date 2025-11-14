@@ -1,0 +1,61 @@
+var upazila = table.filter(ee.Filter.and(ee.Filter.eq("NAME_2","Chittagong"),ee.Filter.eq("NAME_3","Lohagara")));
+print(upazila)
+var sentinel2 = ee.ImageCollection("COPERNICUS/S2")
+                .filterBounds(upazila)
+                .filterDate("2023-01-01","2023-12-31")
+                .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE",10))
+                .median()
+                .clip(upazila)
+// There are two upazila named as "Lohagara" in Bangladesh                
+var bands = ["B2", "B3", "B4"];
+var image = sentinel2.select(bands)
+
+Map.centerObject(image,10)
+Map.addLayer(image)
+
+
+
+
+ var trainingData = settlement.merge(vegetation).merge(waterbody).merge(cropland).merge(bare_land)
+ print(trainingData)
+
+ var training =image.sampleRegions({
+   collection :  trainingData,
+   properties : ["landcover"],
+   scale : 10
+ })
+ 
+ var random_column = training.randomColumn('random');
+ var training_sample = random_column.filter(ee.Filter.lt('random', 0.7));
+ var validation_sample = random_column.filter(ee.Filter.gte('random', 0.3));
+
+ print(training)
+ var classifier = ee.Classifier.smileRandomForest(50).train({
+   features : training_sample,
+   classProperty: "landcover",
+   inputProperties : image.bandNames()
+  
+ })
+ var classified = image.classify(classifier)
+
+
+ var vizprams = {
+   min: 0,
+   max: 4,
+   palette: ['red','blue','green','yellow','grey']
+ }
+ Map.addLayer(classified,vizprams,"Classified_image")
+
+
+ var validated = validation_sample.classify(classifier);
+ var confusionMatrix = validated.errorMatrix('landcover', 'classification')
+
+ print("Accuracy", confusionMatrix.accuracy())
+ 
+ Export.image.toDrive({
+  image : classified,
+  description : "supervised",
+  scale : 10,
+  region : upazila.geometry(),
+  maxPixels : 1e13
+})
